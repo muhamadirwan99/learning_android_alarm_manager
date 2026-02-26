@@ -70,12 +70,12 @@ class AlarmReceiver : BroadcastReceiver() {
         intent.putExtra(EXTRA_MESSAGE, message)
         intent.putExtra(EXTRA_TYPE, type)
 
-        Log.d("ONE TIME", "$date $time")
+        Log.e("ONE TIME", "$date $time")
 
         val dateArray = date.split("-").toTypedArray()
-        val timeArray = date.split(":").toTypedArray()
-
+        val timeArray = time.split(":").toTypedArray()
         val calendar = Calendar.getInstance()
+
         calendar.set(Calendar.YEAR, Integer.parseInt(dateArray[0]))
         calendar.set(Calendar.MONTH, Integer.parseInt(dateArray[1]) - 1)
         calendar.set(Calendar.DAY_OF_MONTH, Integer.parseInt(dateArray[2]))
@@ -83,7 +83,10 @@ class AlarmReceiver : BroadcastReceiver() {
         calendar.set(Calendar.MINUTE, Integer.parseInt(timeArray[1]))
         calendar.set(Calendar.SECOND, 0)
 
-        val pendingIntent = PendingIntent.getBroadcast(context, ID_ONETIME, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getBroadcast(context,
+            ID_ONETIME, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
         alarmManager.set(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
 
         Toast.makeText(context, "One time alarm set up", Toast.LENGTH_SHORT).show()

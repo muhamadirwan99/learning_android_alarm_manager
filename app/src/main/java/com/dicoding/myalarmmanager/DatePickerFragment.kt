@@ -33,8 +33,8 @@ class DatePickerFragment : DialogFragment(), DatePickerDialog.OnDateSetListener 
         return DatePickerDialog(activity as Context, this, year, month, date)
     }
 
-    override fun onDateSet(p0: DatePicker?, p1: Int, p2: Int, p3: Int) {
-        TODO("Not yet implemented")
+    override fun onDateSet(view: DatePicker, year: Int, month: Int, dayOfMonth: Int) {
+        mListener?.onDialogDateSet(tag, year, month, dayOfMonth)
     }
 
     interface DialogDateListener {
