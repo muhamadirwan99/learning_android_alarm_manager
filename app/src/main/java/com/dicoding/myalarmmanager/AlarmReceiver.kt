@@ -10,6 +10,7 @@ import android.content.Intent
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -30,6 +31,22 @@ class AlarmReceiver : BroadcastReceiver() {
 
         if (message != null) {
             showAlarmNotification(context, title, message, notifId)
+        }
+
+        // --- TAMBAHKAN KODE INI UNTUK ESTAFET REPEATING ALARM ---
+        // NOTE: Jika tipe alarmnya adalah REPEATING, kita pasang ulang alarmnya untuk besok di jam yang sama.
+        if (type.equals(TYPE_REPEATING, ignoreCase = true)) {
+            // Karena waktu (time) dan pesan (message) tidak kita simpan secara global di latihan ini,
+            // kita ambil waktu saat ini (saat alarm berbunyi) untuk dipasang ke besok.
+            val calendar = Calendar.getInstance()
+
+            // Format ulang jam saat ini untuk dimasukkan ke parameter fungsi
+            val timeFormat = SimpleDateFormat(TIME_FORMAT, Locale.getDefault())
+            val currentTimeString = timeFormat.format(calendar.time)
+
+            // Panggil kembali fungsi setRepeatingAlarm
+            // Ini akan otomatis diset untuk besok karena ada logika "Past Time" di fungsinya
+            setRepeatingAlarm(context, TYPE_REPEATING, currentTimeString, message ?: "")
         }
     }
 
@@ -62,6 +79,70 @@ class AlarmReceiver : BroadcastReceiver() {
         notificationManagerCompat.notify(notifId, notification)
     }
 
+    fun setRepeatingAlarm(context: Context, type: String, time: String, message: String) {
+        if (isDateInvalid(time, TIME_FORMAT)) return
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, AlarmReceiver::class.java)
+        intent.putExtra(EXTRA_MESSAGE, message)
+        intent.putExtra(EXTRA_TYPE, type)
+
+        val timeArray = time.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.HOUR_OF_DAY, Integer.parseInt(timeArray[0]))
+        calendar.set(Calendar.MINUTE, Integer.parseInt(timeArray[1]))
+        calendar.set(Calendar.SECOND, 0)
+
+        // NOTE: Logika "Past Time" (Mencegah alarm langsung bunyi jika jam sudah lewat hari ini)
+        if (calendar.timeInMillis <= System.currentTimeMillis()) {
+            calendar.add(Calendar.DATE, 1) // Majukan ke besok
+        }
+
+        // NOTE: Tambahkan FLAG_UPDATE_CURRENT agar pesan bisa di-update
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            ID_REPEATING,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // PENTING: Gunakan setExactAndAllowWhileIdle agar menembus Doze Mode (Mode Hemat Baterai) Android
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+
+            // 2. Cek apakah kita punya izin Exact Alarm
+            if (alarmManager.canScheduleExactAlarms()) {
+                // Punya izin, gas jalan!
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+                Toast.makeText(context, "High Precision Alarm set up", Toast.LENGTH_SHORT).show()
+            } else {
+                // 3. Jika belum punya izin, arahkan user ke halaman Settings untuk menyalakannya
+                Toast.makeText(context, "Tolong izinkan alarm presisi tinggi di Pengaturan", Toast.LENGTH_LONG).show()
+
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(intent)
+            }
+
+        } else {
+            // Untuk Android 11 ke bawah (Tidak butuh izin khusus)
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+            Toast.makeText(context, "High Precision Alarm set up", Toast.LENGTH_SHORT).show()
+        }
+
+
+
+        Toast.makeText(context, "High Precision Repeating Alarm set up", Toast.LENGTH_SHORT).show()
+    }
+
     fun setOneTimeAlarm(context: Context, type: String, date: String, time: String, message: String) {
         if (isDateInvalid(date, DATE_FORMAT) || isDateInvalid(time, TIME_FORMAT)) return
 
@@ -83,9 +164,11 @@ class AlarmReceiver : BroadcastReceiver() {
         calendar.set(Calendar.MINUTE, Integer.parseInt(timeArray[1]))
         calendar.set(Calendar.SECOND, 0)
 
-        val pendingIntent = PendingIntent.getBroadcast(context,
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
             ID_ONETIME, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         alarmManager.set(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
 
